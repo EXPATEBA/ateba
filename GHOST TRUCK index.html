@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GHOST TRUCK - Cloud Sync</title>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, where, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        // Configuration avec tes identifiants
+        const firebaseConfig = {
+            apiKey: "AIzaSyDoJwKDL3JrMPSz94vGRn3zrNK0QOBQ7VA",
+            authDomain: "ghost-truck.firebaseapp.com",
+            projectId: "ghost-truck",
+            storageBucket: "ghost-truck.firebasestorage.app",
+            messagingSenderId: "956984506220",
+            appId: "1:956984506220:web:f10e852fea1a334a162549",
+            measurementId: "G-2QY145RL6T"
+        };
+
+        // Initialisation
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let userTeamId = null;
+
+        // Gestion de la connexion
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                userTeamId = user.uid;
+                document.getElementById('authScreen').style.display = 'none';
+                document.getElementById('appScreen').style.display = 'block';
+                document.getElementById('userEmailDisplay').textContent = user.email;
+                activerSyncTempsReel();
+            } else {
+                document.getElementById('authScreen').style.display = 'block';
+                document.getElementById('appScreen').style.display = 'none';
+            }
+        });
+
+        // SYNCHRONISATION TEMPS RÉEL
+        function activerSyncTempsReel() {
+            const q = query(collection(db, "inventaire"), where("teamId", "==", userTeamId));
+            
+            // Cette fonction magique détecte les changements faits par tes collègues instantanément
+            onSnapshot(q, (snapshot) => {
+                const list = document.getElementById('inventoryList');
+                list.innerHTML = "";
+                let total = 0;
+
+                snapshot.forEach((docSnap) => {
+                    const item = docSnap.data();
+                    const id = docSnap.id;
+                    total++;
+                    
+                    list.innerHTML += `
+                        <div class="item-card">
+                            <div class="item-header">
+                                <div class="item-title">${item.nom}</div>
+                                <div class="item-category">${item.categorie}</div>
+                            </div>
+                            <div class="item-details">
+                                <p><strong>Quantité:</strong> ${item.quantite}</p>
+                                <p><strong>Emplacement:</strong> ${item.emplacement || '-'}</p>
+                            </div>
+                            <div class="item-actions">
+                                <button class="btn btn-danger" onclick="supprimerItem('${id}')">Supprimer</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                document.getElementById('totalItems').textContent = total;
+            });
+        }
+
+        // ACTIONS
+        window.handleLogin = (e) => {
+            e.preventDefault();
+            signInWithEmailAndPassword(auth, document.getElementById('loginEmail').value, document.getElementById('loginPassword').value)
+                .catch(err => alert("Erreur: " + err.message));
+        };
+
+        window.handleRegister = (e) => {
+            e.preventDefault();
+            createUserWithEmailAndPassword(auth, document.getElementById('regEmail').value, document.getElementById('regPass').value)
+                .catch(err => alert("Erreur: " + err.message));
+        };
+
+        window.ajouterArticle = async (e) => {
+            e.preventDefault();
+            await addDoc(collection(db, "inventaire"), {
+                nom: document.getElementById('itemName').value,
+                quantite: document.getElementById('itemQty').value,
+                categorie: document.getElementById('itemCat').value,
+                emplacement: document.getElementById('itemLoc').value,
+                teamId: userTeamId,
+                date: Date.now()
+            });
+            e.target.reset();
+        };
+
+        window.supprimerItem = async (id) => {
+            if(confirm("Supprimer ?")) await deleteDoc(doc(db, "inventaire", id));
+        };
+
+        window.logout = () => signOut(auth);
+
+    </script>
+
+    <style>
+        /* Ton design original amélioré */
+        :root { --primary: #667eea; --secondary: #764ba2; }
+        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, var(--primary), var(--secondary)); min-height: 100vh; padding: 20px; color: #333; }
+        .side-credit { position: fixed; top: 50%; transform: translateY(-50%) rotate(-90deg); font-size: 12px; color: rgba(255,255,255,0.5); letter-spacing: 2px; text-transform: uppercase; font-weight: bold; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .header { background: #f8f9fa; padding: 30px; text-align: center; border-bottom: 2px solid #eee; }
+        .content { padding: 30px; }
+        input, select { width: 100%; padding: 12px; margin: 10px 0; border: 2px solid #eee; border-radius: 10px; }
+        .btn { padding: 12px 20px; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-primary { background: var(--primary); color: white; width: 100%; }
+        .btn-danger { background: #ff4d4d; color: white; }
+        .inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 30px; }
+        .item-card { border: 2px solid #f0f0f0; padding: 20px; border-radius: 15px; background: #fff; }
+        .item-title { font-size: 1.2em; font-weight: bold; color: var(--secondary); }
+        .item-category { display: inline-block; background: var(--primary); color: white; padding: 4px 10px; border-radius: 20px; font-size: 0.8em; margin-top: 5px; }
+        .stat-badge { background: var(--primary); color: white; padding: 10px 20px; border-radius: 50px; display: inline-block; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="side-credit" style="left: -40px;">BY · ATEBA</div>
+    <div class="side-credit" style="right: -40px; transform: translateY(-50%) rotate(90deg);">BY · ATEBA</div>
+
+    <div class="container">
+        <div id="authScreen" style="max-width: 400px; margin: 50px auto; padding: 20px;">
+            <h2 style="text-align: center;">🚛 GHOST TRUCK CLOUD</h2>
+            <form onsubmit="handleLogin(event)">
+                <input type="email" id="loginEmail" placeholder="Email d'équipe" required>
+                <input type="password" id="loginPassword" placeholder="Mot de passe" required>
+                <button type="submit" class="btn btn-primary">SE CONNECTER</button>
+            </form>
+            <hr style="margin: 20px 0;">
+            <p style="text-align: center;">Nouvelle équipe ?</p>
+            <form onsubmit="handleRegister(event)">
+                <input type="email" id="regEmail" placeholder="Email" required>
+                <input type="password" id="regPass" placeholder="Mot de passe (6+ car.)" required>
+                <button type="submit" class="btn" style="background: #444; color:white; width: 100%;">CRÉER UN COMPTE</button>
+            </form>
+        </div>
+
+        <div id="appScreen" style="display:none;">
+            <div class="header">
+                <h1>🚛 GHOST TRUCK CLOUD</h1>
+                <p>Equipe : <span id="userEmailDisplay"></span> | <a href="#" onclick="logout()" style="color: red;">Déconnexion</a></p>
+            </div>
+            
+            <div class="content">
+                <div class="stat-badge">Total articles : <span id="totalItems">0</span></div>
+
+                <div style="background: #f9f9f9; padding: 20px; border-radius: 15px;">
+                    <h3>➕ Ajouter du matériel</h3>
+                    <form onsubmit="ajouterArticle(event)" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <input type="text" id="itemName" placeholder="Nom de l'objet" required>
+                        <input type="number" id="itemQty" placeholder="Quantité" required>
+                        <select id="itemCat">
+                            <option value="Outils">Outils</option>
+                            <option value="Mécanique">Mécanique</option>
+                            <option value="Consommables">Consommables</option>
+                        </select>
+                        <input type="text" id="itemLoc" placeholder="Emplacement (ex: Coffre A)">
+                        <button type="submit" class="btn btn-primary" style="grid-column: span 2;">AJOUTER AU CLOUD</button>
+                    </form>
+                </div>
+
+                <div id="inventoryList" class="inventory-grid">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
